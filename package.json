@@ -1,0 +1,11 @@
+{
+  "name": "@jlpenny/curls",
+  "version": "0.1.0",
+  "description": "A curly templating language with no dependencies",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx @jlpenny/curls-tests"
+  },
+  "author": "Jack Penny",
+  "license": "MIT"
+}
