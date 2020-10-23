@@ -119,12 +119,12 @@ class TranspileMachine { // Transpiles token opcodes into code blocks
                     break;
                 case 'EACH':
                     exprStack.push('each');
-                    ret += this.ret(`this.__each(${this.translate([opcodes[0]])}, "${opcodes[1][0] == 'JSV' ? opcodes[1][1] : 'this'}", ${this.block()})`, opts.raw);
+                    ret += this.ret(`this.__each(${this.translate([opcodes[0]])}, "${opcodes[1][0] == 'JSV' ? opcodes[1][1] : 'this'}", ${this.block()})`, true);
                     writeBuf(2);
                     break;
                 case 'WITH':
                     exprStack.push('with');
-                    ret += this.ret(`this.__with(${this.translate([opcodes[0]])}, ${this.block()})`, opts.raw);
+                    ret += this.ret(`this.__with(${this.translate([opcodes[0]])}, ${this.block()})`, true);
                     writeBuf(2);
                     break;
                 case 'ENDBLOCK':
@@ -178,15 +178,15 @@ class TranspileMachine { // Transpiles token opcodes into code blocks
                         argList.push(this.translate([opcodes[i]]));
                         i++;
                     }
-                    ret += this.ret(`this.__runBlock('${opcodes[0][1]}',[${argList.join(',')}], ${this.block()})`, opts.raw);
+                    ret += this.ret(`this.__runBlock('${opcodes[0][1]}',[${argList.join(',')}], ${this.block()})`, true);
                     writeBuf(2);
                     break;
                 case 'PARTIAL':
-                    ret += this.ret(`this.__runPart('${opcodes[0][1]}', ${this.translate([opcodes[1]])})`, opts.raw);
+                    ret += this.ret(`this.__runPart('${opcodes[0][1]}', ${this.translate([opcodes[1]])})`, true);
                     break;
                 case 'BLOCKPART':
                     exprStack.push(opcodes[0][1]);
-                    ret += this.ret(`this.__runPart('${opcodes[0][1]}', ${this.block()})`, opts.raw);
+                    ret += this.ret(`this.__runPart('${opcodes[0][1]}', ${this.block()})`, true);
                     writeBuf(2);
                     break;
                 case 'CREATEPART':
