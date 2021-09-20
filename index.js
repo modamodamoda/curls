@@ -117,9 +117,15 @@ class TranspileMachine { // Transpiles token opcodes into code blocks
                     else
                         ret += this.ret(this.translate(opcodes), opts.raw);
                     break;
+                case 'LOGVAR':
+                    if(nested)
+                        ret += this.translate(opcodes);
+                    else
+                        ret += this.ret(this.translate(opcodes), opts.raw);
+                    break;
                 case 'EACH':
                     exprStack.push('each');
-                    ret += this.ret(`this.__each(${this.translate([opcodes[0]])}, "${opcodes[1][0] == 'JSV' ? opcodes[1][1] : 'this'}", ${this.block()})`, true);
+                    ret += this.ret(`this.__each(${this.translate([opcodes[0]])}, "${opcodes[1][0] == 'JSV' ? opcodes[1][1] : 'this'}", ${this.block()}, ${opcodes[2] && opcodes[2][0] == 'JSV' ? '"' + opcodes[2][1] + '"' : null})`, true);
                     writeBuf(2);
                     break;
                 case 'WITH':
@@ -130,7 +136,7 @@ class TranspileMachine { // Transpiles token opcodes into code blocks
                 case 'ENDBLOCK':
                     let a = exprStack.pop();
                     if(a != opcodes[0][1]) throw 'Unexpected end block!';
-                    if(opcodes[0][1] != 'if') {
+                    if(opcodes[0][1] != 'if' && opcodes[0][1] != 'unless') {
                         writeBuf(1);
                         this.endBlock();
                     } else {
@@ -150,6 +156,20 @@ class TranspileMachine { // Transpiles token opcodes into code blocks
                         i++;
                     }
                     ret += '){';
+                    break;
+                case 'UNLESS':
+                    exprStack.push('unless');
+                    ret += 'if(!(';
+                    i = 0;
+                    while(opcodes[i][0] != 'END') {
+                        if(opcodes[i][0] == 'ARG') {
+                            ret += this.translate(opcodes[i][1]);
+                        } else {
+                            ret += opcodes[i][1];
+                        }
+                        i++;
+                    }
+                    ret += ')){';
                     break;
                 case 'ELSE':
                     if(exprStack[exprStack.length - 1] == 'if' || exprStack[exprStack.length - 1] == 'unless')
@@ -225,9 +245,10 @@ class TranspileMachine { // Transpiles token opcodes into code blocks
 module.exports = class {
     vars = {} // Global variables
     blk = {} // Blocks
-    part = {} // Partials
+	part = {} // Partials
     constructor() {
         this.block('where', (block, context, n, obj) => {
+			if(!n || !Array.isArray(n)) throw 'Invalid array passed to where function';
             if(!obj || typeof obj != 'object') throw 'Invalid object passed to where function';
             if(obj._by) {                        
                 n = n.sort((a, b) => {
@@ -241,16 +262,18 @@ module.exports = class {
             delete obj._by;
             delete obj._order; // don't need these anymore
             let ret = '';
-            n.forEach((a) => {
-                let unmatched = false;
-                for(let i in obj) {
-                    if(obj[i] != a[i]) {
-                        unmatched = true;
-                        break;
-                    }
-                }
-                if(!unmatched) ret += block(a);
-            });
+            if(n && n.forEach) {
+				n.forEach((a) => {
+					let unmatched = false;
+					for(let i in obj) {
+						if(obj[i] != a[i]) {
+							unmatched = true;
+							break;
+						}
+					}
+					if(!unmatched) ret += block({ this: a });
+				});
+			}
             return ret;
         });
     }
@@ -320,6 +343,10 @@ module.exports = class {
                 let ptr = curScope;
                 if(i.length > 1)  { // only validate object properties (otherwise empty variables just return 'undefined')
                     for(g = g; g < i.length; g++) {
+                        if(Array.isArray(i[g])) {
+                            // nested value - get the correct value
+                            i[g] = localVars.__ev(i[g]);
+                        }
                         if(g < i.length - 1 && ptr[i[g]] === undefined) {
                             // woops
                             throw 'Variable undefined! ' + i.join(',');
@@ -342,7 +369,7 @@ module.exports = class {
                 if(ptr !== undefined && typeof ptr === 'function') return ptr(...as);
                 else {
                     if(as.length > 0) throw 'Variable ' + i + ' is not a function.';
-                    return ptr;
+                    return ptr || '';
                 }
             }
             localVars.__print = (str) => {
@@ -358,26 +385,32 @@ module.exports = class {
             localVars.__html = (n) => {
                 return html[n];
             }
-            localVars.__each = (v, a, f) => {
+            localVars.__each = (v, a, f, k) => {
                 let old = null;
                 let curScope = getScope();
                 if(curScope[a] !== undefined) old = curScope[a];
                 let ret = '';
-                v.forEach((el) => {
-                    curScope[a] = el;
-                    ret += f();
-                });
+                if(typeof v === 'object') {
+                    // for ... in
+                    for(let key in v) {
+                        curScope[a] = v[key];
+                        if(k) curScope[k] = key;
+                        ret += f();
+                    }
+                } else {
+                    v.forEach((el) => {
+                        curScope[a] = el;
+                        ret += f();
+                    });
+                }
                 if(old !== null) curScope[a] = old;
                 else delete curScope[a];
                 return ret;
             }
             localVars.__with = (v, f) => {
-                let ret = '';
-                v.forEach((el) => {
-                    scope.push(el);
-                    ret += f();
-                    scope.pop();
-                });
+                scope.push(v);
+                let ret = f();
+                scope.pop();
                 return ret;
             }
             localVars.__blocks = _this.blk;
